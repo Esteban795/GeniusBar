@@ -215,18 +215,27 @@ class Tags(commands.Cog):
 class Tickets(commands.Cog):
     def __init__(self,bot):
         self.bot = bot
-    
+
+    @commands.command()
+    @commands.is_owner()
+    async def resetdb(self,ctx):
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            await db.execute("DELETE FROM tickets;")
+            await db.commit()
+
     @commands.command(aliases=["refreshtickets","updatetickets"])
     async def refreshdb(self,ctx):
+        await self.resetdb(ctx)
         url = "https://lbjs.fr/geniusbar/geniustab.php"
         page = requests.get(url)
         html = page.text
         soup = BeautifulSoup(html,'lxml')
         mydivs = soup.find("tbody").find_all("tr")
+        img_name = None
         for div in mydivs:
             date = div.find("td",class_="datedemande coldate").text[:-9]
-            nom = "\n".join(list(div.find("td",class_="colnom").strings))
-            content = list(div.find("td",class_="colmess").strings)
+            name,classe,mail = list(div.find("td",class_="colnom").strings)
+            title,content,solution = list(div.find("td",class_="colmess").strings)
             t = div.find("td",class_="colmess").find("a",attrs={"data-title": content[0]})
             identifier = div.find("td",class_="colnum").text
             etat = div.find("span",class_="label").text
@@ -237,19 +246,25 @@ class Tickets(commands.Cog):
                 img = requests.get(url,allow_redirects=True)
                 if not os.path.isfile(f"{t['href'][10:]}"):
                     open(f"{t['href'][10:]}","wb").write(img.content)
+                img_name = f"{t['href'][10:]}"
             print(f"Date : {date}")
-            print(f"Nom : {nom}")
+            print(f"Nom : {name}")
             print(f"Contenu du ticket : {content}")
             print(f"T : {t}")
             print(f"id : {identifier}")
             print(f"Etat : {etat}")
-            print("\n \n \n")
-    
+            print("\n \n")
+            async with aiosqlite.connect("dbs/tickets.db") as db:
+                await db.execute(f"INSERT INTO tickets VALUES({identifier},{date},{name},{classe},{mail},{title},{content},{solution},{img_name},{etat});")
+                await db.commit()
+
+    """
     @commands.command()
     async def afaire(self,ctx):
         async with aiosqlite.connect("dbs/tickets.db") as db:
             async with db.execute("SELECT * FROM "):
-                pass
+                pass"""
+
 
             
 
