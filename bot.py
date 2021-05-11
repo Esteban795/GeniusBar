@@ -217,19 +217,19 @@ class Tickets(commands.Cog):
         self.bot = bot
     
     @commands.command(aliases=["refreshtickets","updatetickets"])
-    async def refresh(self,ctx):
+    async def refreshdb(self,ctx):
         url = "https://lbjs.fr/geniusbar/geniustab.php"
         page = requests.get(url)
         html = page.text
         soup = BeautifulSoup(html,'lxml')
         mydivs = soup.find("tbody").find_all("tr")
-        print(mydivs)
         for div in mydivs:
             date = div.find("td",class_="datedemande coldate").text[:-9]
             nom = "\n".join(list(div.find("td",class_="colnom").strings))
             content = list(div.find("td",class_="colmess").strings)
             t = div.find("td",class_="colmess").find("a",attrs={"data-title": content[0]})
             identifier = div.find("td",class_="colnum").text
+            etat = div.find("span",class_="label").text
             if t:
                 url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
                 if os.path.isdir("uploaded_files"):
@@ -242,7 +242,14 @@ class Tickets(commands.Cog):
             print(f"Contenu du ticket : {content}")
             print(f"T : {t}")
             print(f"id : {identifier}")
-            
+            print(f"Etat : {etat}")
+            print("\n \n \n")
+    
+    @commands.command()
+    async def afaire(self,ctx):
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            async with db.execute("SELECT * FROM "):
+                pass
 
             
 
