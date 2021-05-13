@@ -1,4 +1,3 @@
-import builtins
 from functools import cmp_to_key
 from sqlite3.dbapi2 import TimeFromTicks
 from discord.ext.commands.core import command
@@ -10,8 +9,7 @@ import discord
 from discord.ext import commands
 import aiosqlite
 import asyncio
-import glob
-
+import typing
 load_dotenv()
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),description="Le bot du GeniusBar !",intents=discord.Intents.all())
 TOKEN = os.getenv("BOT_TOKEN")
@@ -214,6 +212,13 @@ class Tags(commands.Cog):
             await db.commit()
             await ctx.send(f"Successfully removed {tag_name} tag.")
 
+    @tag.command()
+    async def showall(self,ctx):
+        async with aiosqlite.connect("dbs/tags.db") as db:
+            async with db.execute(f"SELECT * FROM tags;") as cursor:
+                async for row in cursor:
+                    await ctx.send(f"{row[0]} : {row[1]}")
+
 
 class Tickets(commands.Cog):
     def __init__(self,bot):
@@ -285,8 +290,27 @@ class Tickets(commands.Cog):
                     embedVar.add_field(name="Solution : ",value=f"{solution}")
                     embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
                     await ctx.send(embed=embedVar)
-
-            
+    
+    @commands.command()
+    async def sendall(self,ctx,dest:typing.Union[discord.Member,discord.TextChannel]=None):
+        if dest is None:
+            dest = ctx.author
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            async with db.execute("SELECT * FROM tickets;") as cursor:
+                async for row in cursor:        
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
+                    embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
+                    if img_url != "None":
+                        embedVar.set_thumbnail(url=img_url)
+                    embedVar.add_field(name="Date :",value=f"{date}")
+                    embedVar.add_field(name="Classe : ",value=f"{classe}")
+                    embedVar.add_field(name="Nom :",value=f"{name}")
+                    embedVar.add_field(name="Mail : ",value=f"{mail}")
+                    embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
+                    embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
+                    embedVar.add_field(name="Solution : ",value=f"{solution}")
+                    embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
+                    await dest.send(embed=embedVar)
 @bot.event
 async def on_ready():
     print(f'Logged as {bot.user.name}')
