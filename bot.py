@@ -1,4 +1,5 @@
 import builtins
+from sqlite3.dbapi2 import TimeFromTicks
 from discord.ext.commands.core import command
 import requests
 from bs4 import BeautifulSoup
@@ -8,11 +9,12 @@ import discord
 from discord.ext import commands
 import aiosqlite
 import asyncio
+import glob
 
 load_dotenv()
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),description="Le bot du GeniusBar !",intents=discord.Intents.all())
 TOKEN = os.getenv("BOT_TOKEN")
-
+URL = os.getenv("GENIUS_BAR_URL")
 
 class Moderation(commands.Cog):
     def __init__(self,bot):
@@ -217,7 +219,7 @@ class Tickets(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    @commands.is_owner()
+    @commands.has_permissions(administrator=True)
     async def resetdb(self,ctx):
         async with aiosqlite.connect("dbs/tickets.db") as db:
             await db.execute("DELETE FROM tickets;")
@@ -226,50 +228,47 @@ class Tickets(commands.Cog):
     @commands.command(aliases=["refreshtickets","updatetickets"])
     async def refreshdb(self,ctx):
         await self.resetdb(ctx)
-        url = "https://lbjs.fr/geniusbar/geniustab.php"
-        page = requests.get(url)
+        page = requests.get(URL)
         html = page.text
         soup = BeautifulSoup(html,'lxml')
         mydivs = soup.find("tbody").find_all("tr")
-        img_name = None
-        for div in mydivs:
-            date = div.find("td",class_="datedemande coldate").text[:-9]
-            name,classe,mail = list(div.find("td",class_="colnom").strings)
-            title,content,solution = list(div.find("td",class_="colmess").strings)
-            t = div.find("td",class_="colmess").find("a",attrs={"data-title": content[0]})
-            identifier = div.find("td",class_="colnum").text
-            etat = div.find("span",class_="label").text
-            if t:
-                url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
-                if os.path.isdir("uploaded_files"):
-                    os.chdir("uploaded_files")
-                img = requests.get(url,allow_redirects=True)
-                if not os.path.isfile(f"{t['href'][10:]}"):
-                    open(f"{t['href'][10:]}","wb").write(img.content)
-                img_name = f"{t['href'][10:]}"
-            print(f"Date : {date}")
-            print(f"Nom : {name}")
-            print(f"Contenu du ticket : {content}")
-            print(f"T : {t}")
-            print(f"id : {identifier}")
-            print(f"Etat : {etat}")
-            print("\n \n")
-            async with aiosqlite.connect("dbs/tickets.db") as db:
-                await db.execute(f"INSERT INTO tickets VALUES({identifier},{date},{name},{classe},{mail},{title},{content},{solution},{img_name},{etat});")
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            for div in mydivs:
+                img_name = None
+                date = div.find("td",class_="datedemande coldate").text[:-9]
+                name,classe,mail = [i for i in list(div.find("td",class_="colnom").strings)]
+                title,content,solution = [i for i in list(div.find("td",class_="colmess").strings)]
+                t = div.find("td",class_="colmess").find("a",attrs={"data-title": title})
+                identifier = div.find("td",class_="colnum").text
+                etat = div.find("span",class_="label").text
+                content = content.replace('"','\"')
+                if t:
+                    img_url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
+                row = (identifier,date,name,classe,mail,title,content,solution,img_url,etat)
+                await db.execute('INSERT INTO tickets VALUES(?,?,?,?,?,?,?,?,?,?)',row)
                 await db.commit()
 
-    """
     @commands.command()
     async def afaire(self,ctx):
         async with aiosqlite.connect("dbs/tickets.db") as db:
-            async with db.execute("SELECT * FROM "):
-                pass"""
+            async with db.execute("SELECT * FROM tickets WHERE state='A faire';") as cursor:
+                async for row in cursor:
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
+                    embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
+                    embedVar.set_thumbnail(url=img_url)
+                    embedVar.add_field(name="Date :",value=f"{date}")
+                    embedVar.add_field(name="Classe : ",value=f"{classe}")
+                    embedVar.add_field(name="Nom :",value=f"{name}")
+                    embedVar.add_field(name="Mail : ",value=f"{mail}")
+                    embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
+                    embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
+                    embedVar.add_field(name="Solution : ",value=f"{solution}")
+                    await ctx.send(embed=embedVar)
 
+
+                
 
             
-
-
-
 @bot.event
 async def on_ready():
     print(f'Logged as {bot.user.name}')
