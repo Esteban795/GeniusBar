@@ -1,4 +1,5 @@
 import builtins
+from functools import cmp_to_key
 from sqlite3.dbapi2 import TimeFromTicks
 from discord.ext.commands.core import command
 import requests
@@ -234,14 +235,13 @@ class Tickets(commands.Cog):
         mydivs = soup.find("tbody").find_all("tr")
         async with aiosqlite.connect("dbs/tickets.db") as db:
             for div in mydivs:
-                img_name = None
+                img_url = "None"
                 date = div.find("td",class_="datedemande coldate").text[:-9]
                 name,classe,mail = [i for i in list(div.find("td",class_="colnom").strings)]
                 title,content,solution = [i for i in list(div.find("td",class_="colmess").strings)]
                 t = div.find("td",class_="colmess").find("a",attrs={"data-title": title})
                 identifier = div.find("td",class_="colnum").text
                 etat = div.find("span",class_="label").text
-                content = content.replace('"','\"')
                 if t:
                     img_url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
                 row = (identifier,date,name,classe,mail,title,content,solution,img_url,etat)
@@ -255,7 +255,8 @@ class Tickets(commands.Cog):
                 async for row in cursor:
                     identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
                     embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
-                    embedVar.set_thumbnail(url=img_url)
+                    if img_url != "None":
+                        embedVar.set_thumbnail(url=img_url)
                     embedVar.add_field(name="Date :",value=f"{date}")
                     embedVar.add_field(name="Classe : ",value=f"{classe}")
                     embedVar.add_field(name="Nom :",value=f"{name}")
@@ -263,10 +264,27 @@ class Tickets(commands.Cog):
                     embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
                     embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
                     embedVar.add_field(name="Solution : ",value=f"{solution}")
+                    embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php?req=afaire",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
                     await ctx.send(embed=embedVar)
 
-
-                
+    @commands.command()
+    async def getbyid(self,ctx,id=None):
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            async with db.execute("SELECT * FROM tickets WHERE identifier=(?);",(id,)) as cursor:
+                async for row in cursor:        
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
+                    embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
+                    if img_url != "None":
+                        embedVar.set_thumbnail(url=img_url)
+                    embedVar.add_field(name="Date :",value=f"{date}")
+                    embedVar.add_field(name="Classe : ",value=f"{classe}")
+                    embedVar.add_field(name="Nom :",value=f"{name}")
+                    embedVar.add_field(name="Mail : ",value=f"{mail}")
+                    embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
+                    embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
+                    embedVar.add_field(name="Solution : ",value=f"{solution}")
+                    embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
+                    await ctx.send(embed=embedVar)
 
             
 @bot.event
