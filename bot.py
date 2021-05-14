@@ -6,10 +6,11 @@ from bs4 import BeautifulSoup
 import os
 from dotenv import load_dotenv
 import discord
-from discord.ext import commands
+from discord.ext import commands,tasks
 import aiosqlite
 import asyncio
 import typing
+
 load_dotenv()
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),description="Le bot du GeniusBar !",intents=discord.Intents.all())
 TOKEN = os.getenv("BOT_TOKEN")
@@ -68,7 +69,7 @@ class Moderation(commands.Cog):
     @commands.command(aliases=["demute"])
     @commands.has_permissions()
     async def unmute(self,ctx,user:discord.Member):
-        mutedRole = [role for role in ctx.guild.roles if role.name == "Muted"][0]
+        mutedRole = discord.utils.get(ctx.guild.roles)
         await user.remove_roles(mutedRole)
 
     @commands.command(aliases=["banl","bl"])
@@ -223,17 +224,24 @@ class Tags(commands.Cog):
 class Tickets(commands.Cog):
     def __init__(self,bot):
         self.bot = bot
+        self.autorefreshdb.start()
+
+    @tasks.loop(hours=2.0)
+    async def autorefreshdb(self):
+        print("Automatically refreshed tickets database.")
+        channel = await bot.fetch_channel(841586113357152286)
+        await self.refreshdb(channel,False)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def resetdb(self,ctx):
+    async def resetdb(self):
         async with aiosqlite.connect("dbs/tickets.db") as db:
             await db.execute("DELETE FROM tickets;")
             await db.commit()
 
     @commands.command(aliases=["refreshtickets","updatetickets"])
-    async def refreshdb(self,ctx):
-        await self.resetdb(ctx)
+    async def refreshdb(self,channel:discord.TextChannel,feedback=True):
+        await self.resetdb()
         page = requests.get(URL)
         html = page.text
         soup = BeautifulSoup(html,'lxml')
@@ -249,14 +257,16 @@ class Tickets(commands.Cog):
                 etat = div.find("span",class_="label").text
                 if t:
                     img_url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
-                row = (identifier,date,name,classe,mail,title,content,solution,img_url,etat)
+                row = (identifier,date,name,classe[9:],mail,title,content,solution,img_url,etat)
                 await db.execute('INSERT INTO tickets VALUES(?,?,?,?,?,?,?,?,?,?)',row)
                 await db.commit()
+        if feedback:
+            await channel.send("Successfully refreshed tickets database.")
 
     @commands.command()
     async def afaire(self,ctx):
         async with aiosqlite.connect("dbs/tickets.db") as db:
-            async with db.execute("SELECT * FROM tickets WHERE state='A faire';") as cursor:
+            async with db.execute("SELECT * FROM tickets WHERE etat='A faire';") as cursor:
                 async for row in cursor:
                     identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
                     embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
@@ -271,6 +281,13 @@ class Tickets(commands.Cog):
                     embedVar.add_field(name="Solution : ",value=f"{solution}")
                     embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php?req=afaire",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
                     await ctx.send(embed=embedVar)
+
+    @commands.group(invoke_without_command=True)
+    async def searchby(self,ctx):
+        if ctx.invoked_subcommand is None:
+            return await ctx.send("A subcommand needs to be specified.")
+
+
 
     @commands.command()
     async def getbyid(self,ctx,id=None):
