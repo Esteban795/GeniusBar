@@ -10,6 +10,7 @@ from discord.ext import commands,tasks
 import aiosqlite
 import asyncio
 import typing
+from difflib import get_close_matches
 
 load_dotenv()
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),description="Le bot du GeniusBar !",intents=discord.Intents.all())
@@ -173,53 +174,67 @@ class Moderation(commands.Cog):
 class Tags(commands.Cog):
     def __init__(self,bot):
         self.bot = bot
-    
-    @commands.Cog.listener()
-    async def on_guild_join(self,guild:discord.Guild):
-        async with aiosqlite.connect("dbs/tags.db") as db:
-            await db.execute(f"CREATE TABLE IF NOT EXISTS tags(tag_name TEXT,description TEXT);")
-            await db.commit()
-    
-    @commands.Cog.listener()
-    async def on_guild_remove(self,guild):
-        pass
-    
+
     @commands.group(invoke_without_command=True)
     async def tag(self,ctx,*,tag_name):
         if ctx.invoked_subcommand is None:
             async with aiosqlite.connect("dbs/tags.db") as db:
                 async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
-                    async for row in cursor:
-                        await ctx.send(row[0])
-
+                    desc = await cursor.fetchone()
+                    if desc is not None:
+                        await ctx.send(desc[0])
+                    else:
+                        tag_names_availables = await db.execute(f"SELECT tag_name FROM tags")
+                        fetched_tag_names = [i[0] for i in await tag_names_availables.fetchall()]
+                        matches = "\n".join(get_close_matches(tag_name,fetched_tag_names,n=3))
+                        if len(matches) == 0:
+                            return await ctx.send(f"I couldn't find anything close enough to '{tag_name}'. Try something else.")
+                        else:
+                            return await ctx.send(f"Tag '{tag_name}' not found. Maybe you meant :\n{matches}")
+                            
     @tag.command()
     async def add(self,ctx,tag_name,*,description):
         async with aiosqlite.connect("dbs/tags.db") as db:
-            await db.execute(f"INSERT INTO tags VALUES('{tag_name}','{description}')")
-            await db.commit()
-            await ctx.send(f"Successfully added '{tag_name}' tag.")
+            async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
+                desc = await cursor.fetchone()
+            if desc is not None:
+                await ctx.send(f"Tag '{tag_name}' already exists in the database. Please pick another tag name !")
+            else:
+                await db.execute(f"INSERT INTO tags VALUES('{tag_name}','{description}')")
+                await db.commit()
+                await ctx.send(f"Successfully added '{tag_name}' tag.")
     
     @tag.command()
     async def edit(self,ctx,tag_name,*,description):
         async with aiosqlite.connect("dbs/tags.db") as db:
-            await db.execute(f"UPDATE tags SET description = REPLACE(description,(SELECT description FROM tags WHERE tag_name = '{tag_name}'),'{description}')")
-            await db.commit()
-            await ctx.send(f"Succesfully edited '{tag_name}' tag.")
+            async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
+                desc = await cursor.fetchone()
+            if desc is None:
+                await ctx.send(f"No tag named '{tag_name}', so you can't edit it. Please create it first.")
+            else:
+                await db.execute(f"UPDATE tags SET description = REPLACE(description,(SELECT description FROM tags WHERE tag_name = '{tag_name}'),'{description}')")
+                await db.commit()
+                await ctx.send(f"Succesfully edited '{tag_name}' tag.")
 
     @tag.command()
     async def remove(self,ctx,*,tag_name):
         async with aiosqlite.connect("dbs/tags.db") as db:
-            await db.execute(f"DELETE FROM tags WHERE tag_name = '{tag_name}';")                     
-            await db.commit()
-            await ctx.send(f"Successfully removed {tag_name} tag.")
+            async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
+                desc = await cursor.fetchone()
+            if desc is None:
+                await ctx.send(f"No tag named '{tag_name}', so you can't remove it.")
+            else:
+                await db.execute(f"DELETE FROM tags WHERE tag_name = '{tag_name}';")                     
+                await db.commit()
+                await ctx.send(f"Successfully removed '{tag_name}' tag.")
 
     @tag.command()
+    @commands.is_owner()
     async def showall(self,ctx):
         async with aiosqlite.connect("dbs/tags.db") as db:
             async with db.execute(f"SELECT * FROM tags;") as cursor:
                 async for row in cursor:
                     await ctx.send(f"{row[0]} : {row[1]}")
-
 
 class Tickets(commands.Cog):
     def __init__(self,bot):
@@ -328,6 +343,28 @@ class Tickets(commands.Cog):
                     embedVar.add_field(name="Solution : ",value=f"{solution}")
                     embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
                     await dest.send(embed=embedVar)
+
+class ErrorHandler(commands.Cog):
+    def __init__(self,bot):
+        self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_command_error(self,ctx, error):
+        if isinstance(error, commands.CommandNotFound):
+            cmd = ctx.invoked_with
+            cmds = [cmd.name for cmd in bot.commands]
+            matches = "\n".join(get_close_matches(cmd, cmds,n=3))
+            if len(matches) > 0:
+                await ctx.send(f"Command \"{cmd}\" not found. Maybe you meant :\n{matches}")
+            else:
+                await ctx.send(f'Command "{cmd}" not found, use the help command to know what commands are available')
+        elif isinstance(error,commands.MissingPermissions):
+            await ctx.send(error)
+        elif isinstance(error,commands.MissingRequiredArgument):
+            await ctx.send(error)
+        elif isinstance(error,commands.NotOwner):
+            return await ctx.send("You must be owner of this bot to perform this command.")
+
 @bot.event
 async def on_ready():
     print(f'Logged as {bot.user.name}')
@@ -335,7 +372,6 @@ async def on_ready():
 bot.add_cog(Moderation(bot))
 bot.add_cog(Tags(bot))
 bot.add_cog(Tickets(bot))
+bot.add_cog(ErrorHandler(bot))
 
 bot.run(TOKEN)
-
-            
