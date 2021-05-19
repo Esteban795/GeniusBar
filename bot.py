@@ -241,18 +241,16 @@ class Tickets(commands.Cog):
         self.bot = bot
         self.autorefreshdb.start()
 
+    async def resetdb(self):
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            await db.execute("DELETE FROM tickets;")
+            await db.commit()
+
     @tasks.loop(hours=2.0)
     async def autorefreshdb(self):
         print("Automatically refreshed tickets database.")
         channel = await bot.fetch_channel(841586113357152286)
         await self.refreshdb(channel,False)
-
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def resetdb(self):
-        async with aiosqlite.connect("dbs/tickets.db") as db:
-            await db.execute("DELETE FROM tickets;")
-            await db.commit()
 
     @commands.command(aliases=["refreshtickets","updatetickets"])
     async def refreshdb(self,channel:discord.TextChannel,feedback=True):
