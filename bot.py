@@ -1,6 +1,3 @@
-from functools import cmp_to_key
-from sqlite3.dbapi2 import TimeFromTicks
-from discord.ext.commands.core import command
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -13,7 +10,7 @@ import typing
 from difflib import get_close_matches
 
 load_dotenv()
-bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"),description="Le bot du GeniusBar !",intents=discord.Intents.all())
+bot = commands.Bot(command_prefix=commands.when_mentioned_or("?"),description="Le bot du GeniusBar !",intents=discord.Intents.all(),activity=discord.Game(name="aider le GeniusBar à faire son boulot !"))
 TOKEN = os.getenv("BOT_TOKEN")
 URL = os.getenv("GENIUS_BAR_URL")
 
@@ -31,7 +28,7 @@ class Moderation(commands.Cog):
         for channel in guild.channels:
             await channel.set_permissions(mutedRole, send_messages = False, speak = False)
     
-    @commands.command(aliases=["addrole","roleadd"])
+    @commands.command(aliases=["addrole","roleadd"],help="Add role from a member of the server. ?giverole [mention member here] [role name]")
     @commands.has_permissions(manage_roles=True)
     async def giverole(self,ctx,user:discord.Member,role:discord.Role):
         await user.add_roles(role)
@@ -39,7 +36,7 @@ class Moderation(commands.Cog):
         embedVar.set_footer(text=f"Requested by {ctx.author}.")
         await ctx.send(embed=embedVar)
 
-    @commands.command(aliases=["rmvrole"])
+    @commands.command(aliases=["rmvrole"],help="Removes role from a member of the server. ?removerole [mention member here] [role name]")
     @commands.has_permissions(manage_roles = True)
     async def removerole(self,ctx,user : discord.Member, role:discord.Role): # $removerole [member] [role]
         await user.remove_roles(role)
@@ -47,7 +44,7 @@ class Moderation(commands.Cog):
         embedVar.set_footer(text=f"Requested by {ctx.author}.")
         await ctx.send(embed=embedVar)
 
-    @commands.command(aliases=["gtfo"])
+    @commands.command(aliases=["gtfo"],help="Kicks a user out of the server. ?kick [mention member here] [reason,optional]")
     @commands.has_permissions(kick_members = True)
     async def kick(self,ctx, user: discord.Member, *,reason="Not specified."): # $kick [member] [reason]
         PMembed = discord.Embed(title="Uh oh. Looks like you did something quite bad !",color=0xff0000)
@@ -58,7 +55,7 @@ class Moderation(commands.Cog):
         embedVar.set_footer(text=f"Requested by {ctx.author}.")
         await ctx.send(embed=embedVar)
 
-    @commands.command()
+    @commands.command(help="Mutes a user .?mute [mention member here] [duration, optional]")
     @commands.has_permissions()
     async def mute(self,ctx,user:discord.Member,time:str=None):
         mutedRole = [role for role in ctx.guild.roles if role.name == "Muted"][0]
@@ -67,13 +64,13 @@ class Moderation(commands.Cog):
             await asyncio.sleep(int(time))
             await user.remove_roles(mutedRole)
     
-    @commands.command(aliases=["demute"])
+    @commands.command(aliases=["demute"],help="Demutes a user .?mute [mention member here]")
     @commands.has_permissions()
     async def unmute(self,ctx,user:discord.Member):
         mutedRole = discord.utils.get(ctx.guild.roles)
         await user.remove_roles(mutedRole)
 
-    @commands.command(aliases=["banl","bl"])
+    @commands.command(aliases=["banl","bl"],help="Displays current banlist.")
     @commands.has_permissions(administrator = True)
     async def banlist(self,ctx): #Displays current banlist from the server
         bans = await ctx.guild.bans()
@@ -88,7 +85,7 @@ class Moderation(commands.Cog):
             embedVar.set_footer(text=f"Requested by {ctx.author}.")
             await ctx.send(embed=embedVar)
 
-    @commands.command(aliases=["b","bna"])
+    @commands.command(aliases=["b","bna"],help="Bans a user of the server. ?ban [mention member here] [reason,optional]")
     @commands.has_permissions(ban_members = True)
     async def ban(self,ctx,user : discord.Member,time:str=None, *,reason="Not specified."): # $ban [user] [reason]
         embedVar = discord.Embed(title="Uh oh. Looks like you did something QUITE bad !",color=0xff0000)
@@ -100,7 +97,7 @@ class Moderation(commands.Cog):
             await asyncio.sleep(int(time))
             await ctx.guild.unban(user,reason="Ban duration is over.")
 
-    @commands.command(aliases=["u","unbna"])
+    @commands.command(aliases=["u","unbna"],help="Unbans a user of the server. ?unban [name]")
     @commands.has_permissions(ban_members = True)
     async def unban(self,ctx,person,*,reason="Not specified."):
         bans = await ctx.guild.bans()
@@ -158,15 +155,15 @@ class Moderation(commands.Cog):
             else:
                 await ctx.send("I can't find anyone with username '{}'. Try something else !".format(person))
 
-    @commands.command(aliases=["p","perrms"])
+    @commands.command(aliases=["p","perrms"],help="[members]'s permissions on this server. ?perms [mention member here]")
     @commands.has_permissions(administrator = True)
     async def perms(self,ctx,member:discord.Member):
         embedVar = discord.Embed(title=f"You asked for {member}'s permissions on {ctx.guild}.",color=0xaaaaff)
         embedVar.add_field(name="Here they are : ",value="\n".join(["• {}".format(i[0]) for i in member.guild_permissions if i[1] is True]))
         await ctx.author.send(embed=embedVar)
 
-    @commands.command(aliases=["clear","clearmsg"])
-    @commands.has_permissions(manage_messages = True) 
+    @commands.command(aliases=["clear"],help="Deletes [amount] messages. ?purge [integer]")
+    @commands.has_permissions() 
     async def purge(self,ctx,Amount:int=2): #Delete "Amount" messages from the current channel. $purge [int]
         await ctx.channel.purge(limit=Amount + 1)
 
@@ -175,7 +172,7 @@ class Tags(commands.Cog):
     def __init__(self,bot):
         self.bot = bot
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True,help="Tag system. You can add, edit or remove a tag. ?tag [tag_name] will return what description you typed when you created the tag.")
     async def tag(self,ctx,*,tag_name):
         if ctx.invoked_subcommand is None:
             async with aiosqlite.connect("dbs/tags.db") as db:
@@ -192,7 +189,7 @@ class Tags(commands.Cog):
                         else:
                             return await ctx.send(f"Tag '{tag_name}' not found. Maybe you meant :\n{matches}")
                             
-    @tag.command()
+    @tag.command(help="Creates a tag in the database associated with the description you gave. ?tag add [tag_name] [description]")
     async def add(self,ctx,tag_name,*,description):
         async with aiosqlite.connect("dbs/tags.db") as db:
             async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
@@ -204,7 +201,7 @@ class Tags(commands.Cog):
                 await db.commit()
                 await ctx.send(f"Successfully added '{tag_name}' tag.")
     
-    @tag.command()
+    @tag.command(help="Edits a tag in the database associated with the description you gave. ?tag edit [tag_name] [description]")
     async def edit(self,ctx,tag_name,*,description):
         async with aiosqlite.connect("dbs/tags.db") as db:
             async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
@@ -216,7 +213,7 @@ class Tags(commands.Cog):
                 await db.commit()
                 await ctx.send(f"Succesfully edited '{tag_name}' tag.")
 
-    @tag.command()
+    @tag.command(help="Removes a tag from the database associated with the tag name you gave. ?tag remove [tag_name]")
     async def remove(self,ctx,*,tag_name):
         async with aiosqlite.connect("dbs/tags.db") as db:
             async with db.execute(f"SELECT description FROM tags WHERE tag_name = '{tag_name}';") as cursor:
@@ -228,7 +225,7 @@ class Tags(commands.Cog):
                 await db.commit()
                 await ctx.send(f"Successfully removed '{tag_name}' tag.")
 
-    @tag.command()
+    @tag.command(help="Displays all tags and descriptions availables in the DB. Owner only !")
     @commands.is_owner()
     async def showall(self,ctx):
         async with aiosqlite.connect("dbs/tags.db") as db:
@@ -243,18 +240,46 @@ class Tickets(commands.Cog):
 
     async def resetdb(self):
         async with aiosqlite.connect("dbs/tickets.db") as db:
+            async with db.execute("SELECT MAX(id) FROM tickets;") as cursor:
+                greater_than = await cursor.fetchone()
             await db.execute("DELETE FROM tickets;")
             await db.commit()
+        return greater_than[0]
+
+    async def new(self):
+        l = []
+        channel = await bot.fetch_channel(841586113357152286)
+        async with aiosqlite.connect("dbs/tickets.db") as db:
+            async with db.execute("SELECT * FROM tickets WHERE new = 'True';") as cursor:
+                async for row in cursor:
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat,new = row
+                    embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
+                    if img_url != "None":
+                        embedVar.set_thumbnail(url=img_url)
+                    embedVar.add_field(name="Date :",value=f"{date}")
+                    embedVar.add_field(name="Classe : ",value=f"{classe}")
+                    embedVar.add_field(name="Nom :",value=f"{name}")
+                    embedVar.add_field(name="Mail : ",value=f"{mail}")
+                    embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
+                    embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
+                    embedVar.add_field(name="Solution : ",value=f"{solution}")
+                    embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php?req=afaire",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
+                    l.append(embedVar)
+        if len(l) > 0:
+            for i in l[::-1]:
+                await channel.send(embed=i)
 
     @tasks.loop(hours=2.0)
     async def autorefreshdb(self):
         print("Automatically refreshed tickets database.")
         channel = await bot.fetch_channel(841586113357152286)
         await self.refreshdb(channel,False)
+        await asyncio.sleep(10)
+        await self.new()
 
-    @commands.command(aliases=["refreshtickets","updatetickets"])
+    @commands.command(aliases=["refreshtickets","updatetickets"],help="Manually refreshes the database.")
     async def refreshdb(self,channel:discord.TextChannel,feedback=True):
-        await self.resetdb()
+        is_new_id = await self.resetdb()
         page = requests.get(URL)
         html = page.text
         soup = BeautifulSoup(html,'lxml')
@@ -266,18 +291,23 @@ class Tickets(commands.Cog):
                 name,classe,mail = [i for i in list(div.find("td",class_="colnom").strings)]
                 title,content,solution = [i for i in list(div.find("td",class_="colmess").strings)]
                 t = div.find("td",class_="colmess").find("a",attrs={"data-title": title})
-                identifier = div.find("td",class_="colnum").text
+                identifier = int(div.find("td",class_="colnum").text)
                 etat = div.find("span",class_="label").text
+                if is_new_id is not None and identifier > is_new_id:
+                    new = "True"
+                else:
+                    new = "False"
                 if t:
                     img_url = f"https://lbjs.fr/geniusbar{t['href'][1:]}"
-                row = (identifier,date,name,classe[9:],mail,title,content,solution,img_url,etat)
-                await db.execute('INSERT INTO tickets VALUES(?,?,?,?,?,?,?,?,?,?)',row)
+                row = (identifier,date,name,classe[9:],mail,title,content,solution,img_url,etat,new)
+                await db.execute('INSERT INTO tickets VALUES(?,?,?,?,?,?,?,?,?,?,?)',row)
                 await db.commit()
         if feedback:
             await channel.send("Successfully refreshed tickets database.")
 
-    @commands.command()
+    @commands.command(help="Shows all pending requests. ?afaire")
     async def afaire(self,ctx):
+        l = []
         async with aiosqlite.connect("dbs/tickets.db") as db:
             async with db.execute("SELECT * FROM tickets WHERE etat='A faire';") as cursor:
                 async for row in cursor:
@@ -293,35 +323,16 @@ class Tickets(commands.Cog):
                     embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
                     embedVar.add_field(name="Solution : ",value=f"{solution}")
                     embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php?req=afaire",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
-                    await ctx.send(embed=embedVar)
+                    l.append(embedVar)
+        for i in l[::-1]:
+            await ctx.send(embed=i)
 
-    @commands.group(invoke_without_command=True)
+    @commands.group(invoke_without_command=True,help="work in progress here")
     async def searchby(self,ctx):
         if ctx.invoked_subcommand is None:
             return await ctx.send("A subcommand needs to be specified.")
 
-
-
-    @commands.command()
-    async def getbyid(self,ctx,id=None):
-        async with aiosqlite.connect("dbs/tickets.db") as db:
-            async with db.execute("SELECT * FROM tickets WHERE identifier=(?);",(id,)) as cursor:
-                async for row in cursor:        
-                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
-                    embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
-                    if img_url != "None":
-                        embedVar.set_thumbnail(url=img_url)
-                    embedVar.add_field(name="Date :",value=f"{date}")
-                    embedVar.add_field(name="Classe : ",value=f"{classe}")
-                    embedVar.add_field(name="Nom :",value=f"{name}")
-                    embedVar.add_field(name="Mail : ",value=f"{mail}")
-                    embedVar.add_field(name="Etat de la demande : ",value=f"{etat}")
-                    embedVar.add_field(name="Problème : ",value=f"{content}",inline=False)
-                    embedVar.add_field(name="Solution : ",value=f"{solution}")
-                    embedVar.set_author(name="Genius Bar",url="https://lbjs.fr/geniusbar/geniustab.php",icon_url="https://cdn.discordapp.com/attachments/773193080069292048/840156906449928232/genius20centralesupelec-77a1b54d2e1047e5aba4773145220bdc.png")
-                    await ctx.send(embed=embedVar)
-    
-    @commands.command()
+    @commands.command(help="Sends every requests ever made to the website.  ?sendall [either a member, a textchannel or author of the command is nothing is given]")
     async def sendall(self,ctx,dest:typing.Union[discord.Member,discord.TextChannel]=None):
         if dest is None:
             dest = ctx.author
@@ -362,6 +373,7 @@ class ErrorHandler(commands.Cog):
             await ctx.send(error)
         elif isinstance(error,commands.NotOwner):
             return await ctx.send("You must be owner of this bot to perform this command.")
+
 
 @bot.event
 async def on_ready():
