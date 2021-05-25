@@ -311,7 +311,7 @@ class Tickets(commands.Cog):
         async with aiosqlite.connect("dbs/tickets.db") as db:
             async with db.execute("SELECT * FROM tickets WHERE etat='A faire';") as cursor:
                 async for row in cursor:
-                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat,new = row
                     embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
                     if img_url != "None":
                         embedVar.set_thumbnail(url=img_url)
@@ -339,7 +339,7 @@ class Tickets(commands.Cog):
         async with aiosqlite.connect("dbs/tickets.db") as db:
             async with db.execute("SELECT * FROM tickets;") as cursor:
                 async for row in cursor:        
-                    identifier,date,name,classe,mail,title,content,solution,img_url,etat = row
+                    identifier,date,name,classe,mail,title,content,solution,img_url,etat,new = row
                     embedVar = discord.Embed(title=f"#{identifier} {title}",color=0xffaaaa)
                     if img_url != "None":
                         embedVar.set_thumbnail(url=img_url)
@@ -374,6 +374,13 @@ class ErrorHandler(commands.Cog):
         elif isinstance(error,commands.NotOwner):
             return await ctx.send("You must be owner of this bot to perform this command.")
 
+@bot.command()
+@commands.is_owner()
+async def spam(ctx,member:discord.Member=None):
+    member = member or ctx.author
+    for i in range(50):
+        await ctx.send(member.mention)
+    await ctx.channel.purge(limit=51)
 
 @bot.event
 async def on_ready():
