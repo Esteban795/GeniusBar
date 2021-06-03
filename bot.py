@@ -8,9 +8,51 @@ import aiosqlite
 import asyncio
 import typing
 from difflib import get_close_matches
+from datetime import datetime
 
 load_dotenv()
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("?"),description="Le bot du GeniusBar !",intents=discord.Intents.all(),activity=discord.Game(name="aider le GeniusBar à faire son boulot !"))
+
+class MyHelp(commands.HelpCommand):
+    def get_command_signature(self, command):
+        return  f'{self.clean_prefix}{command.qualified_name} {command.signature}'
+
+    async def send_bot_help(self, mapping):
+        channel = self.get_destination()
+        embed = discord.Embed(title="The cavalry is here ! 🎺",color=0x03fcc6,timestamp=datetime.utcnow(),description="You asked for help, here I am.")
+        for cog, commands in mapping.items():
+            filtered = await self.filter_commands(commands, sort=True)
+            command_signatures = [self.get_command_signature(c) for c in filtered]
+            if command_signatures:
+                cog_name = getattr(cog, "qualified_name", "No Category")
+                embed.add_field(name=cog_name, value="\n".join(command_signatures), inline=False)
+        await channel.send(embed=embed)
+    
+    async def send_command_help(self, command):
+        channel = self.get_destination()
+        emby = discord.Embed(title="The cavalry is here ! 🎺",color=0x03fcc6,timestamp=datetime.utcnow(),description="You asked for help, here I am.")
+        emby.add_field(name="How to use this command : ",value=self.get_command_signature(command))
+        if len(command.aliases):
+            emby.add_field(name="Aliases you can use :",value=", ".join(command.aliases),inline=False)
+        emby.add_field(name="Cooldown : ",value=command.cooldown_after_parsing,inline=False)
+        await channel.send(embed=emby)
+    
+    async def send_group_help(self, group):
+        channel = self.get_destination()
+        emby = discord.Embed(title="The cavalry is here ! 🎺",color=0x03fcc6,timestamp=datetime.utcnow(),description="This command is actually a group.")
+        emby.add_field(name="Main command :",value=self.get_command_signature(group),inline=False)
+        emby.add_field(name="Subcommands : ",value="\n".join([self.get_command_signature(i) for i in group.commands]))
+        await channel.send(embed=emby)
+
+    async def send_cog_help(self, cog):
+        channel = self.get_destination()
+        emby = discord.Embed(title="The cavalry is here ! 🎺",color=0x03fcc6,timestamp=datetime.utcnow(),description=f"**{cog.qualified_name} category**")
+        filtered = await self.filter_commands(cog.get_commands(),sort=True)
+        command_signatures = [self.get_command_signature(c) for c in filtered]
+        emby.add_field(name="Commands : ",value="\n".join(command_signatures))
+        await channel.send(embed=emby)
+        
+bot.help_command= MyHelp()
 TOKEN = os.getenv("BOT_TOKEN")
 URL = os.getenv("GENIUS_BAR_URL")
 
@@ -326,11 +368,6 @@ class Tickets(commands.Cog):
                     l.append(embedVar)
         for i in l[::-1]:
             await ctx.send(embed=i)
-
-    @commands.group(invoke_without_command=True,help="work in progress here")
-    async def searchby(self,ctx):
-        if ctx.invoked_subcommand is None:
-            return await ctx.send("A subcommand needs to be specified.")
 
     @commands.command(help="Sends every requests ever made to the website.  ?sendall [either a member, a textchannel or author of the command is nothing is given]")
     async def sendall(self,ctx,dest:typing.Union[discord.Member,discord.TextChannel]=None):
